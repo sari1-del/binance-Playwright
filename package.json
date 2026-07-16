@@ -1,0 +1,19 @@
+{
+  "name": "binancebot",
+  "version": "1.0.0",
+  "description": "Binance Square Auto-Poster Bot with Playwright",
+  "main": "auto-poster.js",
+  "scripts": {
+    "start": "node auto-poster.js",
+    "install-browsers": "playwright install chromium"
+  },
+  "keywords": ["binance", "crypto", "trading", "bot"],
+  "author": "Sarique",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.40.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
