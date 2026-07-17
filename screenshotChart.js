@@ -23,7 +23,7 @@ export async function screenshotChart(symbol) {
   const page = await context.newPage();
 
   const url = config.chartUrlTemplate.replace('{symbol}', symbol);
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
   // Give the charting library time to render candles.
   await page.waitForTimeout(5000);
