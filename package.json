@@ -10,7 +10,7 @@
     "codegen": "playwright codegen https://www.binance.com/en/square"
   },
   "dependencies": {
-    "playwright": "^1.47.0",
+    "playwright": "1.61.1",
     "node-cron": "^3.0.3",
     "dotenv": "^16.4.5"
   }
