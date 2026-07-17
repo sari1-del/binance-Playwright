@@ -1,0 +1,17 @@
+{
+  "name": "binance-square-bot",
+  "version": "1.0.0",
+  "description": "Screenshots a coin chart, generates AI commentary via OpenRouter, and posts it to Binance Square on a schedule.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "login": "node src/getStorageState.js",
+    "codegen": "playwright codegen https://www.binance.com/en/square"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5"
+  }
+}
