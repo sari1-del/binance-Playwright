@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Screenshots a coin chart, generates AI commentary via OpenRouter, and posts it to Binance Square on a schedule.",
   "type": "module",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "login": "node src/getStorageState.js",
+    "start": "node index.js",
+    "login": "node getStorageState.js",
     "codegen": "playwright codegen https://www.binance.com/en/square"
   },
   "dependencies": {
