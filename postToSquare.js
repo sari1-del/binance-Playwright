@@ -20,7 +20,11 @@ function loadStorageState() {
  */
 export async function postToSquare(symbol, text, imageBuffer) {
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ storageState: loadStorageState() });
+  // Match the desktop layout used when the Square selectors were captured.
+  const context = await browser.newContext({
+    storageState: loadStorageState(),
+    viewport: { width: 1600, height: 1000 },
+  });
   const page = await context.newPage();
 
   // Binance maintains live connections, so waiting for network idle can time out.
