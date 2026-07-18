@@ -1,23 +1,19 @@
 import { config } from './config.js';
 
-const prompt = (plan) => `Write a concise Binance Square educational Futures market-analysis post.
-Use the supplied 15-minute data exactly. Do not invent price levels, leverage, certainty, or a call to action.
+const prompt = (plan) => `Write exactly three short plain-text bullet points for an educational Futures chart review of ${plan.symbol}.
+The data is: 24h change +${plan.changePercent24h.toFixed(2)}%, direction ${plan.direction}, timeframe 15m.
+Mention momentum, volatility, and that the levels are references rather than instructions. Do not include a heading, price, leverage, call to action, or disclaimer.`;
 
-Format as plain text:
-$${plan.symbol} - ${plan.direction} 15m SETUP WATCH
+const planTemplate = (plan) => `$${plan.symbol} - ${plan.direction} 15m SETUP WATCH
 
 24h change: +${plan.changePercent24h.toFixed(2)}% | Current price: ${plan.currentPrice}
 Observation zone: ${plan.entryLow} - ${plan.entryHigh}
 Reference levels: ${plan.targets.map((target, index) => `T${index + 1} ${target}`).join(' | ')}
-Invalidation level: ${plan.stop}
+Invalidation level: ${plan.stop}`;
 
-Setup logic:
-* Mention the 24-hour gain and the 15-minute trend.
-* Explain that levels are chart references, not instructions.
-* Mention volatility, liquidation risk, and a predefined risk limit.
-
-End with: Educational analysis only - not financial advice. No guaranteed outcome.
-Keep the entire post under 900 characters. Plain text only.`;
+const fallbackLogic = (plan) => `* The +${plan.changePercent24h.toFixed(2)}% 24-hour move signals elevated volatility.
+* The 15-minute ${plan.direction.toLowerCase()} structure is context only; reference levels are not instructions.
+* Futures can liquidate quickly, so use a predefined risk limit and avoid over-leverage.`;
 
 export async function generateSignal(plan, imageBuffer) {
   const imageB64 = imageBuffer.toString('base64');
@@ -38,5 +34,6 @@ export async function generateSignal(plan, imageBuffer) {
   const data = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.find((part) => part.text)?.text;
   if (!text) throw new Error(`Gemini response had no text: ${JSON.stringify(data)}`);
-  return text.trim() + config.disclaimer;
+  const logic = text.trim().split('\n').filter(Boolean).length >= 2 ? text.trim() : fallbackLogic(plan);
+  return `${planTemplate(plan)}\n\nSetup logic:\n${logic}${config.disclaimer}`;
 }
