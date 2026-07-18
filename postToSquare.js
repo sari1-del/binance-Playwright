@@ -49,10 +49,10 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   // Add the Binance Square Futures coin card (price/chart/watchlist widget).
   await page.locator('#post-editor-more-icon > .center > .bn-svg').click();
-  await page.getByText('Coin', { exact: true }).first().click();
+  await page.locator('div').filter({ hasText: 'Coin' }).first().click();
   const coinSearch = page.getByRole('textbox', { name: 'Search coin or stock' });
   await coinSearch.fill(symbol.replace(/USDT$/, ''));
-  await page.getByText(`${symbol}Perp`, { exact: true }).last().click();
+  await page.locator('div').filter({ hasText: `${symbol}Perp` }).nth(3).click();
   await page.waitForTimeout(2000);
 
   if (config.dryRun) {
