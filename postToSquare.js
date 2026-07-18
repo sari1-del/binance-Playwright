@@ -19,13 +19,6 @@ function loadStorageState() {
  * step is not optional — running this file unmodified will very likely fail.
  */
 export async function postToSquare(symbol, text, imageBuffer) {
-  // A dry run is for reviewing generated content. Do not require working
-  // Binance Square selectors until publishing has been explicitly enabled.
-  if (config.dryRun) {
-    console.log(`[DRY RUN] Would publish post for ${symbol}:\n${text}\n`);
-    return;
-  }
-
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState: loadStorageState() });
   const page = await context.newPage();
@@ -35,7 +28,11 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   // Selectors captured with Playwright Codegen on Binance Square.
   const composer = page.locator('#feed-home-tabs');
-  await composer.getByRole('textbox').fill(text);
+  // Square displays the editor only after its "Share your insights" prompt is opened.
+  await page.getByText('Share your insights', { exact: true }).click();
+  const editor = composer.getByRole('textbox');
+  await editor.waitFor({ state: 'visible', timeout: 30_000 });
+  await editor.fill(text);
 
   const fileInput = page.locator('input[type="file"]');
   await fileInput.setInputFiles({
@@ -53,6 +50,12 @@ export async function postToSquare(symbol, text, imageBuffer) {
   await coinSearch.fill(symbol.replace(/USDT$/, ''));
   await page.getByText(`${symbol}Perp`, { exact: true }).last().click();
   await page.waitForTimeout(2000);
+
+  if (config.dryRun) {
+    console.log(`[DRY RUN] Composer and widget validated for ${symbol}:\n${text}\n`);
+    await browser.close();
+    return;
+  }
 
   await composer.getByRole('button', { name: 'Post', exact: true }).click();
   await page.waitForTimeout(2000);
