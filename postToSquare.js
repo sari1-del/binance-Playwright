@@ -28,8 +28,8 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   // Selectors captured with Playwright Codegen on Binance Square.
   const composer = page.locator('#feed-home-tabs');
-  // Square displays the editor only after its "Share your insights" prompt is opened.
-  await page.getByText('Share your insights', { exact: true }).click();
+  // Open Square's editor using the interaction captured by Playwright Codegen.
+  await composer.getByRole('paragraph').first().click();
   const editor = composer.getByRole('textbox');
   await editor.waitFor({ state: 'visible', timeout: 30_000 });
   await editor.fill(text);
