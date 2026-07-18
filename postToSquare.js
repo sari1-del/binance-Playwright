@@ -19,6 +19,13 @@ function loadStorageState() {
  * step is not optional — running this file unmodified will very likely fail.
  */
 export async function postToSquare(symbol, text, imageBuffer) {
+  // A dry run is for reviewing generated content. Do not require working
+  // Binance Square selectors until publishing has been explicitly enabled.
+  if (config.dryRun) {
+    console.log(`[DRY RUN] Would publish post for ${symbol}:\n${text}\n`);
+    return;
+  }
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState: loadStorageState() });
   const page = await context.newPage();
@@ -38,13 +45,9 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   await page.waitForTimeout(2000); // let the image preview upload
 
-  if (config.dryRun) {
-    console.log(`[DRY RUN] Would publish post for ${symbol}:\n${text}\n`);
-  } else {
-    await page.click('[data-testid="publish-button"]');
-    await page.waitForTimeout(2000);
-    console.log(`[postToSquare] Published post for ${symbol}`);
-  }
+  await page.click('[data-testid="publish-button"]');
+  await page.waitForTimeout(2000);
+  console.log(`[postToSquare] Published post for ${symbol}`);
   // --- end placeholder section ---
 
   await browser.close();
