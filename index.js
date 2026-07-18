@@ -3,36 +3,29 @@ import { config } from './config.js';
 import { screenshotChart } from './screenshotChart.js';
 import { generateSignal } from './generateSignal.js';
 import { postToSquare } from './postToSquare.js';
+import { getFifteenMinutePlan, rememberSymbol, selectTopGainer } from './marketData.js';
 
 async function runCycle() {
-  console.log(`[cycle] starting at ${new Date().toISOString()}, symbols: ${config.symbols.join(', ')}`);
-
-  for (const symbol of config.symbols) {
-    try {
-      console.log(`[cycle] ${symbol}: capturing chart`);
-      const image = await screenshotChart(symbol);
-
-      console.log(`[cycle] ${symbol}: generating commentary`);
-      const text = await generateSignal(symbol, image);
-
-      console.log(`[cycle] ${symbol}: posting`);
-      await postToSquare(symbol, text, image);
-
-      console.log(`[cycle] ${symbol}: done`);
-    } catch (err) {
-      // One symbol failing should not kill the whole worker or the schedule.
-      console.error(`[cycle] ${symbol}: FAILED —`, err.message);
-    }
+  console.log(`[cycle] starting at ${new Date().toISOString()}, scanning USD-M Futures 24-hour gainers`);
+  try {
+    const gainer = await selectTopGainer();
+    const plan = await getFifteenMinutePlan(gainer.symbol, gainer);
+    console.log(`[cycle] selected ${plan.symbol}: +${plan.changePercent24h.toFixed(2)}% in 24h`);
+    console.log(`[cycle] ${plan.symbol}: capturing chart`);
+    const image = await screenshotChart(plan.symbol);
+    console.log(`[cycle] ${plan.symbol}: generating post`);
+    const text = await generateSignal(plan, image);
+    console.log(`[cycle] ${plan.symbol}: posting`);
+    await postToSquare(plan.symbol, text, image);
+    await rememberSymbol(plan.symbol);
+    console.log(`[cycle] ${plan.symbol}: done`);
+  } catch (error) {
+    console.error(`[cycle] FAILED -`, error.message);
   }
-
   console.log(`[cycle] finished at ${new Date().toISOString()}`);
 }
 
 console.log(`[worker] starting. schedule="${config.cronSchedule}" dryRun=${config.dryRun}`);
-
-// Run once immediately on boot, then on schedule.
 runCycle();
 cron.schedule(config.cronSchedule, runCycle);
-
-// Keep the process alive (Railway worker service).
 process.stdin.resume();

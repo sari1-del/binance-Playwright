@@ -1,35 +1,22 @@
 import 'dotenv/config';
 
 function required(name, fallback) {
-  const v = process.env[name] ?? fallback;
-  if (v === undefined) throw new Error(`Missing required env var: ${name}`);
-  return v;
+  const value = process.env[name] ?? fallback;
+  if (value === undefined) throw new Error(`Missing required env var: ${name}`);
+  return value;
 }
 
 export const config = {
-  // Comma-separated list, e.g. "BTCUSDT,ETHUSDT"
-  symbols: required('SYMBOLS', 'BTCUSDT').split(',').map(s => s.trim()),
-
-  // Chart page to screenshot. Point this at the exact URL you want captured
-  // (Binance futures/spot chart, or a TradingView embed you control).
-  chartUrlTemplate: required(
-    'CHART_URL_TEMPLATE',
-    'https://www.binance.com/en/trade/{symbol}?type=spot'
-  ),
-
-  // Base64-encoded Playwright storageState JSON (cookies + localStorage).
-  // Generate this once with `npm run login` and paste the output here as a secret.
+  chartUrlTemplate: required('CHART_URL_TEMPLATE', 'https://www.binance.com/en/futures/{symbol}'),
+  futuresApiBase: required('FUTURES_API_BASE', 'https://fapi.binance.com'),
+  minQuoteVolume: Number(required('MIN_QUOTE_VOLUME', '20000000')),
+  noRepeatSignals: Number(required('NO_REPEAT_SIGNALS', '5')),
+  // Mount a Railway Volume at /data so the rotation survives restarts.
+  signalStatePath: required('SIGNAL_STATE_PATH', '/data/recent-signals.json'),
   storageStateB64: required('STORAGE_STATE_B64'),
-
-  // OpenRouter
   openRouterApiKey: required('OPENROUTER_API_KEY'),
-  openRouterModel: required('OPENROUTER_MODEL', 'openai/gpt-4o'), // must be a vision-capable model on OpenRouter
-
-  // How often to run a full cycle. Cron syntax, default: every 4 hours.
-  cronSchedule: required('CRON_SCHEDULE', '0 */4 * * *'),
-
-  // Safety switch — set to "false" to only log the generated post instead of publishing it.
+  openRouterModel: required('OPENROUTER_MODEL', 'openai/gpt-4o'),
+  cronSchedule: required('CRON_SCHEDULE', '*/20 * * * *'),
   dryRun: required('DRY_RUN', 'true') === 'true',
-
-  disclaimer: '\n\n🤖 AI-generated market commentary — not financial advice. DYOR.',
+  disclaimer: '\n\nAI-generated educational market analysis only - not financial advice. Futures are high risk; no outcome is guaranteed.',
 };
