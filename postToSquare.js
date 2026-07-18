@@ -24,6 +24,21 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   await page.goto('https://www.binance.com/en/square', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
+  // Dismiss any popups/banners that may appear on a fresh session (cookie
+  // consent, "don't show again" prompts, etc). These are optional — if one
+  // doesn't appear within a few seconds, move on without failing the run.
+  const dismissIfPresent = async (locator) => {
+    try {
+      await locator.click({ timeout: 5000 });
+    } catch {
+      // not present — that's fine, continue
+    }
+  };
+  await dismissIfPresent(page.getByRole('button', { name: 'Accept Cookies & Continue' }));
+  await dismissIfPresent(page.getByRole('checkbox', { name: "Don't show this message again" }));
+  await dismissIfPresent(page.getByRole('button', { name: 'Yes' }));
+  await dismissIfPresent(page.getByText('Skip'));
+
   // Click the composer placeholder to open/activate it, then type the post text.
   await page.getByRole('paragraph').click();
   await page.locator('#feed-home-tabs').getByRole('textbox').fill(text);
