@@ -39,8 +39,28 @@ export async function postToSquare(symbol, text, imageBuffer) {
   await dismissIfPresent(page.getByRole('button', { name: 'Yes' }));
   await dismissIfPresent(page.getByText('Skip'));
 
+  console.log(`[postToSquare] loaded page: ${page.url()} title="${await page.title()}"`);
+
+  // If the saved session has expired, Square shows a "Login" button instead
+  // of the post composer — fail fast with a clear message instead of hanging
+  // on a composer that will never appear.
+  const loginButton = page.locator('#square-header').getByRole('button', { name: 'Login' });
+  if (await loginButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await browser.close();
+    throw new Error(
+      'Not logged in — STORAGE_STATE_B64 looks expired or invalid. ' +
+      'Re-run `npm run login` locally and update the Railway env var.'
+    );
+  }
+
   // Click the composer placeholder to open/activate it, then type the post text.
-  await page.getByRole('paragraph').click();
+  try {
+    await page.getByRole('paragraph').click({ timeout: 15000 });
+  } catch (error) {
+    console.log(`[postToSquare] composer click failed on ${page.url()} title="${await page.title()}"`);
+    await browser.close();
+    throw error;
+  }
   await page.locator('#feed-home-tabs').getByRole('textbox').fill(text);
 
   // Attach the chart screenshot.
