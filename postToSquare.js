@@ -7,51 +7,49 @@ function loadStorageState() {
 
 /**
  * Publishes a post with `text` and an attached image (`imageBuffer`) to
- * Binance Square.
+ * Binance Square, plus a live coin-price widget for `symbol`.
  *
- * IMPORTANT: the selectors below are placeholders — you must capture the
- * real ones yourself. Easiest way:
- *   1. `npm run codegen` (opens a real browser + Playwright inspector)
- *   2. Log in, go to Square, click "New Post", type text, attach an image,
- *      and watch the generated code for the actual selectors Playwright used.
- *   3. Paste those selectors in below.
- * The DOM here is a single-page app and changes without notice, so this
- * step is not optional — running this file unmodified will very likely fail.
+ * Selectors below were captured with Playwright Codegen against the
+ * current (2026-07-18) Binance Square layout. As always, expect these to
+ * need re-capturing if Binance ships a UI change — re-run `npm run codegen`
+ * and update this file the same way if posting starts failing again.
  */
 export async function postToSquare(symbol, text, imageBuffer) {
   const browser = await chromium.launch({ headless: true });
-  // Match the desktop layout used when the Square selectors were captured.
   const context = await browser.newContext({
     storageState: loadStorageState(),
     viewport: { width: 1600, height: 1000 },
   });
   const page = await context.newPage();
 
-  // Binance maintains live connections, so waiting for network idle can time out.
   await page.goto('https://www.binance.com/en/square', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
-  // Selectors captured with Playwright Codegen on Binance Square.
-  const composer = page.locator('#feed-home-tabs');
-  // Open Square's editor using the interaction captured by Playwright Codegen.
-  await composer.getByRole('paragraph').first().click();
-  const editor = composer.getByRole('textbox');
-  await editor.waitFor({ state: 'visible', timeout: 30_000 });
-  await editor.fill(text);
+  // Open the composer and type the post text.
+  await page.locator('#feed-home-tabs').getByRole('textbox').fill(text);
 
+  // Attach the chart screenshot.
+  await page.getByText('Upload File').click();
   const fileInput = page.locator('input[type="file"]');
   await fileInput.setInputFiles({
     name: `${symbol}-chart.png`,
     mimeType: 'image/png',
     buffer: imageBuffer,
   });
-
   await page.waitForTimeout(5000); // let the image preview upload
 
-  // Add the Binance Square Futures coin card (price/chart/watchlist widget).
+  // Open the "more" menu, then the coin-widget option.
   await page.locator('#post-editor-more-icon > .center > .bn-svg').click();
-  await page.locator('div').filter({ hasText: 'Coin' }).first().click();
+  await page.locator('.bn-svg.h-full').click();
+
+  // Search for the coin and select it from the dropdown.
   const coinSearch = page.getByRole('textbox', { name: 'Search coin or stock' });
+  await coinSearch.click();
   await coinSearch.fill(symbol.replace(/USDT$/, ''));
+  await page.waitForTimeout(1500); // let the results list populate
+
+  // The results list renders several nested <div>s per row; nth(3) was the
+  // clickable row when this was captured. If coin selection ever silently
+  // fails, re-capture this line first — it's the most fragile part of the flow.
   await page.locator('div').filter({ hasText: `${symbol}Perp` }).nth(3).click();
   await page.waitForTimeout(2000);
 
@@ -61,10 +59,9 @@ export async function postToSquare(symbol, text, imageBuffer) {
     return;
   }
 
-  await composer.getByRole('button', { name: 'Post', exact: true }).click();
+  await page.getByRole('button', { name: 'Post' }).first().click();
   await page.waitForTimeout(2000);
   console.log(`[postToSquare] Published post for ${symbol}`);
-  // --- end placeholder section ---
 
   await browser.close();
 }
