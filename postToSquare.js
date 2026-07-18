@@ -24,7 +24,8 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   await page.goto('https://www.binance.com/en/square', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
-  // Open the composer and type the post text.
+  // Click the composer placeholder to open/activate it, then type the post text.
+  await page.getByRole('paragraph').click();
   await page.locator('#feed-home-tabs').getByRole('textbox').fill(text);
 
   // Attach the chart screenshot.
