@@ -21,21 +21,22 @@ Keep the entire post under 900 characters. Plain text only.`;
 
 export async function generateSignal(plan, imageBuffer) {
   const imageB64 = imageBuffer.toString('base64');
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent`,
+    {
     method: 'POST',
-    headers: { Authorization: `Bearer ${config.openRouterApiKey}`, 'Content-Type': 'application/json' },
+    headers: { 'x-goog-api-key': config.geminiApiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: config.openRouterModel,
-      max_tokens: 400,
-      messages: [{ role: 'user', content: [
-        { type: 'text', text: prompt(plan) },
-        { type: 'image_url', image_url: { url: `data:image/png;base64,${imageB64}` } },
+      contents: [{ parts: [
+        { text: prompt(plan) },
+        { inline_data: { mime_type: 'image/png', data: imageB64 } },
       ] }],
+      generationConfig: { maxOutputTokens: 400 },
     }),
   });
-  if (!response.ok) throw new Error(`OpenRouter error ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`Gemini error ${response.status}: ${await response.text()}`);
   const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content;
-  if (!text) throw new Error(`OpenRouter response had no content: ${JSON.stringify(data)}`);
+  const text = data?.candidates?.[0]?.content?.parts?.find((part) => part.text)?.text;
+  if (!text) throw new Error(`Gemini response had no text: ${JSON.stringify(data)}`);
   return text.trim() + config.disclaimer;
 }

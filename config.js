@@ -14,8 +14,8 @@ export const config = {
   // Mount a Railway Volume at /data so the rotation survives restarts.
   signalStatePath: required('SIGNAL_STATE_PATH', '/data/recent-signals.json'),
   storageStateB64: required('STORAGE_STATE_B64'),
-  openRouterApiKey: required('OPENROUTER_API_KEY'),
-  openRouterModel: required('OPENROUTER_MODEL', 'openai/gpt-4o'),
+  geminiApiKey: required('GEMINI_API_KEY'),
+  geminiModel: required('GEMINI_MODEL', 'gemini-2.5-flash'),
   cronSchedule: required('CRON_SCHEDULE', '*/20 * * * *'),
   dryRun: required('DRY_RUN', 'true') === 'true',
   disclaimer: '\n\nAI-generated educational market analysis only - not financial advice. Futures are high risk; no outcome is guaranteed.',
