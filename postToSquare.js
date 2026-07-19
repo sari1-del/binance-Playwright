@@ -53,12 +53,22 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   await page.waitForTimeout(5000); // let the image preview upload
 
-  // Add the Binance Square Futures coin card (price/chart/watchlist widget).
-  await page.locator('.css-13a1332 > .editor-toolbar-container > .css-fwp0gd > .css-14x7wge > .icon-wrapper > .trade-widget-icon > .bn-svg').click();
-  const coinSearch = page.getByRole('textbox', { name: 'Search coin or stock' });
-  await coinSearch.fill(symbol.replace(/USDT$/, ''));
-  await page.getByText('Perp').nth(4).click();
-  await page.waitForTimeout(2000);
+  // Add the Futures coin card when Binance exposes the toolbar control. This
+  // widget is decorative, so a UI change must not block the image-and-text post.
+  try {
+    const tradeWidgetButton = page.locator('.css-13a1332 > .editor-toolbar-container > .css-fwp0gd > .css-14x7wge > .icon-wrapper > .trade-widget-icon > .bn-svg');
+    if (await tradeWidgetButton.count()) {
+      await tradeWidgetButton.click({ timeout: 5_000 });
+      const coinSearch = page.getByRole('textbox', { name: 'Search coin or stock' });
+      await coinSearch.fill(symbol.replace(/USDT$/, ''));
+      await page.getByText('Perp').nth(4).click();
+      await page.waitForTimeout(2000);
+    } else {
+      console.warn('[postToSquare] Futures coin-card control not found; continuing without it');
+    }
+  } catch (error) {
+    console.warn(`[postToSquare] Could not add Futures coin card; continuing without it: ${error.message}`);
+  }
 
   if (config.dryRun) {
     console.log(`[DRY RUN] Composer and widget validated for ${symbol}:\n${text}\n`);
