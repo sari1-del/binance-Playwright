@@ -32,7 +32,8 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   // Selectors captured with Playwright Codegen on Binance Square, July 2026.
   // Authentication comes from STORAGE_STATE_B64; do not add login automation here.
-  await page.getByRole('link', { name: 'Square Stay informed with' }).click();
+  // The "Square Stay informed" link was an incidental Codegen interaction;
+  // it is not present in the headless layout used on Railway.
   await page.getByRole('button', { name: 'Post' }).first().click();
   await page.getByRole('paragraph').nth(1).click();
 
