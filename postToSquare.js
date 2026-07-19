@@ -81,18 +81,22 @@ export async function postToSquare(symbol, text, imageBuffer) {
     throw new Error(`No visible market-widget asset appeared for ${symbol}; refusing to publish without it`);
   }
 
-  const quoteOptions = page.getByText('BUSD', { exact: true });
   let selectedQuote = false;
-  for (let index = 0; index < await quoteOptions.count(); index += 1) {
-    const option = quoteOptions.nth(index);
-    if (await option.isVisible()) {
-      await option.click({ timeout: 5_000 });
-      selectedQuote = true;
-      break;
+  const preferredQuotes = symbol.endsWith('USDT') ? ['USDT', 'BUSD'] : ['BUSD'];
+  for (const quote of preferredQuotes) {
+    const quoteOptions = page.getByText(quote, { exact: true });
+    for (let index = 0; index < await quoteOptions.count(); index += 1) {
+      const option = quoteOptions.nth(index);
+      if (await option.isVisible()) {
+        await option.click({ timeout: 5_000 });
+        selectedQuote = true;
+        break;
+      }
     }
+    if (selectedQuote) break;
   }
   if (!selectedQuote) {
-    throw new Error(`BUSD is unavailable for the ${baseSymbol} market widget; refusing to publish without it`);
+    throw new Error(`No supported quote is available for the ${baseSymbol} market widget; refusing to publish without it`);
   }
   await page.getByRole('button', { name: 'OK', exact: true }).click({ timeout: 5_000 });
   await page.waitForTimeout(2000);
