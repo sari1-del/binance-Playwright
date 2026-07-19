@@ -98,7 +98,12 @@ export async function postToSquare(symbol, text, imageBuffer) {
   if (!selectedQuote) {
     throw new Error(`No supported quote is available for the ${baseSymbol} market widget; refusing to publish without it`);
   }
-  await page.getByRole('button', { name: 'OK', exact: true }).click({ timeout: 5_000 });
+  const okButton = page.getByRole('button', { name: 'OK', exact: true });
+  if (await okButton.count() > 0 && await okButton.first().isVisible()) {
+    await okButton.first().click({ timeout: 5_000 });
+  } else {
+    console.log('[postToSquare] Market-widget pair was confirmed automatically');
+  }
   await page.waitForTimeout(2000);
 
   if (config.dryRun) {
