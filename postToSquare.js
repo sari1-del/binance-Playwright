@@ -85,8 +85,8 @@ export async function postToSquare(symbol, text, imageBuffer) {
   }
 
   await page.getByRole('button', { name: 'Post', exact: true }).last().click();
-  await page.waitForTimeout(2000);
-  console.log(`[postToSquare] Published post for ${symbol}`);
+  await editor.waitFor({ state: 'hidden', timeout: 15_000 });
+  console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
   // --- end placeholder section ---
 
   await browser.close();
