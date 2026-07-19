@@ -118,28 +118,23 @@ export async function postToSquare(symbol, text, imageBuffer) {
   });
   const page = await context.newPage();
 
-  // Capture any API responses that look like the create-post call, so if the
-  // click on "Post" doesn't visibly do anything, we can see what Binance's
-  // server actually said (status code + body) instead of guessing from the DOM.
-  const capturedResponses = [];
+  // The create-post API call is the actual source of truth for whether the
+  // post succeeded — the composer's visibility in the DOM is not reliable
+  // (observed cases where Binance accepted the post server-side but the
+  // composer stayed on screen well past 30s). Capture this response so we
+  // can key success/failure off it directly instead of the DOM.
+  let publishResponse;
   page.on('response', async (response) => {
     const url = response.url();
-    const isCandidate = /\/(square|content|post|feed)[^?]*\/(create|publish|add|post)/i.test(url)
-      || /square/i.test(url) && response.request().method() === 'POST';
-    if (!isCandidate) return;
+    if (!/\/bapi\/composite\/v5\/private\/pgc\/content\/add/.test(url)) return;
+    if (response.request().method() !== 'POST') return;
     let body;
     try {
-      body = await response.text();
-      if (body.length > 2000) body = `${body.slice(0, 2000)}…(truncated)`;
+      body = await response.json();
     } catch {
-      body = '<unreadable body>';
+      body = null;
     }
-    capturedResponses.push({
-      url,
-      method: response.request().method(),
-      status: response.status(),
-      body,
-    });
+    publishResponse = { url, status: response.status(), body };
   });
 
   // Binance maintains live connections, so waiting for network idle can time out.
@@ -237,48 +232,53 @@ export async function postToSquare(symbol, text, imageBuffer) {
   // Binance renders the final publish button in a portal outside the composer.
   await clickComposerPostButton(page, triggerButtonHandle);
 
-  try {
-    await composer.waitFor({ state: 'hidden', timeout: 30_000 });
-    console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
-    console.log(`[postToSquare] captured post-related network responses: ${JSON.stringify(capturedResponses)}`);
-  } catch (err) {
-    // The click succeeded but the composer never closed. Capture enough
-    // context here to tell apart: (a) a silent rejection with a toast/
-    // validation message still on screen, (b) it was just slower than our
-    // timeout and would have closed eventually, or (c) we're watching a
-    // stale duplicate node while the real composer already closed.
-    const composerCount = await page.locator('.short-editor-editor-wrapper').count().catch(() => -1);
-    const visibleCount = await page.locator('.short-editor-editor-wrapper').evaluateAll(
-      (nodes) => nodes.filter((n) => n.offsetParent !== null).length,
-    ).catch(() => -1);
+  // Wait for the create-post response to arrive (up to 30s), polling the
+  // variable the response listener above fills in. This is the real success
+  // signal — the composer's DOM visibility is not reliable, see note above.
+  const pollIntervalMs = 250;
+  const maxWaitMs = 30_000;
+  let waited = 0;
+  while (!publishResponse && waited < maxWaitMs) {
+    await page.waitForTimeout(pollIntervalMs);
+    waited += pollIntervalMs;
+  }
 
-    // Railway sets RAILWAY_VOLUME_MOUNT_PATH to the mounted volume's path
-    // when a volume is attached; that storage survives past container exit,
-    // unlike /tmp which is gone as soon as the deploy stops.
+  if (!publishResponse) {
+    // We never even saw a response to the publish call — this is a genuine
+    // failure (click may not have reached the button, request may have been
+    // blocked, etc). Capture diagnostics before failing.
     const screenshotDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/tmp';
     let screenshotPath;
     try {
-      screenshotPath = `${screenshotDir}/${symbol}-composer-timeout-${Date.now()}.png`;
+      screenshotPath = `${screenshotDir}/${symbol}-no-response-${Date.now()}.png`;
       await page.screenshot({ path: screenshotPath, fullPage: true });
     } catch (screenshotErr) {
-      console.log(`[postToSquare] failed to capture timeout screenshot: ${screenshotErr.message}`);
+      console.log(`[postToSquare] failed to capture screenshot: ${screenshotErr.message}`);
     }
-
-    // Grab visible text of any element that looks like an alert/toast, best-effort.
-    const possibleErrorText = await page
-      .locator('[role="alert"], [class*="toast" i], [class*="error" i], [class*="message" i]')
-      .allInnerTexts()
-      .catch(() => []);
-
-    console.log(`[postToSquare] ${symbol}: composer did not close within 30s after clicking Post.`);
-    console.log(`[postToSquare] composer nodes: total=${composerCount} visible=${visibleCount}`);
-    console.log(`[postToSquare] possible error/toast text: ${JSON.stringify(possibleErrorText)}`);
-    if (screenshotPath) console.log(`[postToSquare] timeout screenshot saved to ${screenshotPath}`);
-    console.log(`[postToSquare] page url at timeout: ${page.url()}`);
-    console.log(`[postToSquare] captured post-related network responses: ${JSON.stringify(capturedResponses)}`);
-
+    console.log(`[postToSquare] ${symbol}: no publish API response observed within 30s after clicking Post.`);
+    if (screenshotPath) console.log(`[postToSquare] screenshot saved to ${screenshotPath}`);
     await browser.close();
-    throw err;
+    throw new Error('No response observed from the publish request after clicking Post');
+  }
+
+  const { status, body } = publishResponse;
+  const succeeded = status === 200 && body && body.code === '000000' && body.success === true;
+
+  if (!succeeded) {
+    console.log(`[postToSquare] ${symbol}: publish request did not indicate success.`);
+    console.log(`[postToSquare] response status=${status} body=${JSON.stringify(body)}`);
+    await browser.close();
+    throw new Error(`Publish request failed: status=${status} code=${body && body.code} message=${body && body.message}`);
+  }
+
+  console.log(`[postToSquare] Submission accepted for ${symbol}. postId=${body.data && body.data.id} shareLink=${body.data && body.data.shareLink}`);
+
+  // Best-effort: give the UI a moment to settle/close, but don't fail the
+  // cycle if it doesn't — we already have server confirmation of success.
+  try {
+    await composer.waitFor({ state: 'hidden', timeout: 10_000 });
+  } catch {
+    console.log(`[postToSquare] ${symbol}: composer did not visibly close, but publish was confirmed by the API response above — treating as success.`);
   }
   // --- end placeholder section ---
 
