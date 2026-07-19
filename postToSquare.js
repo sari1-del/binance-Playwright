@@ -212,8 +212,44 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   // Binance renders the final publish button in a portal outside the composer.
   await clickComposerPostButton(page, triggerButtonHandle);
-  await composer.waitFor({ state: 'hidden', timeout: 15_000 });
-  console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
+
+  try {
+    await composer.waitFor({ state: 'hidden', timeout: 30_000 });
+    console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
+  } catch (err) {
+    // The click succeeded but the composer never closed. Capture enough
+    // context here to tell apart: (a) a silent rejection with a toast/
+    // validation message still on screen, (b) it was just slower than our
+    // timeout and would have closed eventually, or (c) we're watching a
+    // stale duplicate node while the real composer already closed.
+    const composerCount = await page.locator('.short-editor-editor-wrapper').count().catch(() => -1);
+    const visibleCount = await page.locator('.short-editor-editor-wrapper').evaluateAll(
+      (nodes) => nodes.filter((n) => n.offsetParent !== null).length,
+    ).catch(() => -1);
+
+    let screenshotPath;
+    try {
+      screenshotPath = `/tmp/${symbol}-composer-timeout-${Date.now()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+    } catch (screenshotErr) {
+      console.log(`[postToSquare] failed to capture timeout screenshot: ${screenshotErr.message}`);
+    }
+
+    // Grab visible text of any element that looks like an alert/toast, best-effort.
+    const possibleErrorText = await page
+      .locator('[role="alert"], [class*="toast" i], [class*="error" i], [class*="message" i]')
+      .allInnerTexts()
+      .catch(() => []);
+
+    console.log(`[postToSquare] ${symbol}: composer did not close within 30s after clicking Post.`);
+    console.log(`[postToSquare] composer nodes: total=${composerCount} visible=${visibleCount}`);
+    console.log(`[postToSquare] possible error/toast text: ${JSON.stringify(possibleErrorText)}`);
+    if (screenshotPath) console.log(`[postToSquare] timeout screenshot saved to ${screenshotPath}`);
+    console.log(`[postToSquare] page url at timeout: ${page.url()}`);
+
+    await browser.close();
+    throw err;
+  }
   // --- end placeholder section ---
 
   await browser.close();
