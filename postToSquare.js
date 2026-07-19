@@ -6,6 +6,97 @@ function loadStorageState() {
 }
 
 /**
+ * Finds and clicks the composer's real "Post" submit button.
+ *
+ * Binance renders this button in a portal outside the composer DOM
+ * subtree, and briefly shows other elements matching role=button
+ * name="Post" while the composer is opening/animating (e.g. the trigger
+ * button that opened the composer in the first place). A single
+ * snapshot-and-click is therefore flaky:
+ *   - the candidate set can still be changing when we look at it
+ *   - a button can be "visible" per Playwright but not yet actionable
+ *     while an overlay/animation is settling
+ *
+ * This retries the whole scan a few times, waits for the candidate
+ * count to stabilize, excludes the button that opened the composer,
+ * skips disabled buttons, and logs full diagnostics if it still can't
+ * find a good target.
+ */
+async function clickComposerPostButton(page, triggerButtonHandle) {
+  const maxAttempts = 4;
+  const settleChecks = 3;
+  const settleIntervalMs = 300;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const buttons = page.getByRole('button', { name: 'Post', exact: true });
+
+    // Wait for the candidate count to stop changing before trusting it.
+    let lastCount = -1;
+    let stableStreak = 0;
+    while (stableStreak < settleChecks) {
+      const count = await buttons.count();
+      if (count === lastCount) {
+        stableStreak += 1;
+      } else {
+        stableStreak = 0;
+        lastCount = count;
+      }
+      await page.waitForTimeout(settleIntervalMs);
+    }
+
+    const count = await buttons.count();
+    let rightmostButton;
+    let rightmostX = -1;
+    const debugInfo = [];
+
+    for (let index = 0; index < count; index += 1) {
+      const button = buttons.nth(index);
+
+      if (triggerButtonHandle) {
+        const isTrigger = await button.evaluate(
+          (el, triggerEl) => el === triggerEl,
+          triggerButtonHandle,
+        ).catch(() => false);
+        if (isTrigger) {
+          debugInfo.push({ index, skipped: 'is trigger button' });
+          continue;
+        }
+      }
+
+      const visible = await button.isVisible().catch(() => false);
+      const disabled = await button.isDisabled().catch(() => true);
+      const box = visible ? await button.boundingBox().catch(() => null) : null;
+      debugInfo.push({ index, visible, disabled, box });
+
+      if (!visible || disabled || !box) continue;
+      if (box.x > rightmostX) {
+        rightmostButton = button;
+        rightmostX = box.x;
+      }
+    }
+
+    if (rightmostButton) {
+      try {
+        await rightmostButton.scrollIntoViewIfNeeded();
+        await rightmostButton.click({ timeout: 15_000 });
+        return;
+      } catch (err) {
+        console.log(`[clickComposerPostButton] attempt ${attempt}/${maxAttempts}: click failed - ${err.message}`);
+      }
+    } else {
+      console.log(`[clickComposerPostButton] attempt ${attempt}/${maxAttempts}: no usable candidate. count=${count}`);
+      console.log(`[clickComposerPostButton] candidates: ${JSON.stringify(debugInfo)}`);
+    }
+
+    if (attempt < maxAttempts) {
+      await page.waitForTimeout(1_000);
+    }
+  }
+
+  throw new Error('Composer Post button was not found or not clickable after retries');
+}
+
+/**
  * Publishes a post with `text` and an attached image (`imageBuffer`) to
  * Binance Square.
  *
@@ -34,7 +125,13 @@ export async function postToSquare(symbol, text, imageBuffer) {
   // Authentication comes from STORAGE_STATE_B64; do not add login automation here.
   // The "Square Stay informed" link was an incidental Codegen interaction;
   // it is not present in the headless layout used on Railway.
-  await page.getByRole('button', { name: 'Post' }).first().click();
+  const triggerButton = page.getByRole('button', { name: 'Post' }).first();
+  await triggerButton.click();
+  // Keep a handle to the trigger button so the final submit-button scan can
+  // exclude it (it also matches role=button name="Post" and can otherwise
+  // be picked by mistake if it lingers on screen during the composer animation).
+  const triggerButtonHandle = await triggerButton.elementHandle().catch(() => null);
+
   const composer = page.locator('.short-editor-editor-wrapper').first();
   await composer.waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByRole('paragraph').nth(1).click();
@@ -54,6 +151,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   });
 
   await page.waitForTimeout(5000); // let the image preview upload
+  console.log(`[postToSquare] ${symbol}: image attached, proceeding to market widget`);
 
   // Add the market widget using the flow recorded in Playwright Codegen.
   const baseSymbol = symbol.replace(/USDT$/, '');
@@ -113,8 +211,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   }
 
   // Binance renders the final publish button in a portal outside the composer.
-  // Codegen records it as the third Post button on the page.
-  await page.getByRole('button', { name: 'Post', exact: true }).nth(2).click();
+  await clickComposerPostButton(page, triggerButtonHandle);
   await composer.waitFor({ state: 'hidden', timeout: 15_000 });
   console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
   // --- end placeholder section ---
