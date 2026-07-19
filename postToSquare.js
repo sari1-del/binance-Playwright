@@ -55,36 +55,46 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   await page.waitForTimeout(5000); // let the image preview upload
 
-  // The Futures coin card is required for every published post.
-  const tradeWidgetButton = page.locator('.trade-widget-icon').first();
-  if (await tradeWidgetButton.count() === 0) {
-    throw new Error('Futures coin-card control was not found; refusing to publish without it');
-  }
-  await tradeWidgetButton.click({ timeout: 5_000 });
-
-  const coinSearch = page.getByRole('textbox', { name: 'Search coin or stock' });
-  await coinSearch.fill(symbol.replace(/USDT$/, ''), { timeout: 5_000 });
-  await page.waitForTimeout(1_000); // Binance debounces the coin-picker search.
-
+  // Add the market widget using the flow recorded in Playwright Codegen.
   const baseSymbol = symbol.replace(/USDT$/, '');
-  const perpOptions = page.locator('[id^="tippy-"] .cursor-pointer');
-  let selectedPerp = false;
-  for (let index = 0; index < await perpOptions.count(); index += 1) {
-    const option = perpOptions.nth(index);
-    const optionText = await option.textContent();
-    if (
-      await option.isVisible()
-      && optionText?.includes('Perp')
-      && (optionText.includes(baseSymbol) || optionText.includes(symbol))
-    ) {
+  const marketWidgetButton = page.locator('.icon-box.css-vurnku > .center > .bn-svg > path:nth-child(2)').first();
+  if (await marketWidgetButton.count() === 0) {
+    throw new Error('Market-widget control was not found; refusing to publish without it');
+  }
+  await marketWidgetButton.click({ timeout: 5_000 });
+
+  const assetSearch = page.getByRole('textbox').filter({ hasText: '$' }).last();
+  await assetSearch.fill(`$${baseSymbol}`, { timeout: 5_000 });
+  await page.waitForTimeout(1_000); // Binance debounces the asset search.
+
+  const assetOptions = page.getByText(new RegExp(`^\\$${baseSymbol}`, 'i'));
+  let selectedAsset = false;
+  for (let index = 0; index < await assetOptions.count(); index += 1) {
+    const option = assetOptions.nth(index);
+    if (await option.isVisible()) {
       await option.click({ timeout: 5_000 });
-      selectedPerp = true;
+      selectedAsset = true;
       break;
     }
   }
-  if (!selectedPerp) {
-    throw new Error(`No visible Perp option appeared for ${symbol}; refusing to publish without the Futures coin card`);
+  if (!selectedAsset) {
+    throw new Error(`No visible market-widget asset appeared for ${symbol}; refusing to publish without it`);
   }
+
+  const quoteOptions = page.getByText('BUSD', { exact: true });
+  let selectedQuote = false;
+  for (let index = 0; index < await quoteOptions.count(); index += 1) {
+    const option = quoteOptions.nth(index);
+    if (await option.isVisible()) {
+      await option.click({ timeout: 5_000 });
+      selectedQuote = true;
+      break;
+    }
+  }
+  if (!selectedQuote) {
+    throw new Error(`BUSD is unavailable for the ${baseSymbol} market widget; refusing to publish without it`);
+  }
+  await page.getByRole('button', { name: 'OK', exact: true }).click({ timeout: 5_000 });
   await page.waitForTimeout(2000);
 
   if (config.dryRun) {
