@@ -44,7 +44,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   await editor.click();
   await editor.fill(text);
 
-  const fileInput = page.locator('input[type="file"]').nth(1);
+  const fileInput = page.locator('input[type="file"]').last();
   await fileInput.setInputFiles({
     name: `${symbol}-chart.png`,
     mimeType: 'image/png',
