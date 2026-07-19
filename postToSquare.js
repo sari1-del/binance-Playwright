@@ -118,6 +118,30 @@ export async function postToSquare(symbol, text, imageBuffer) {
   });
   const page = await context.newPage();
 
+  // Capture any API responses that look like the create-post call, so if the
+  // click on "Post" doesn't visibly do anything, we can see what Binance's
+  // server actually said (status code + body) instead of guessing from the DOM.
+  const capturedResponses = [];
+  page.on('response', async (response) => {
+    const url = response.url();
+    const isCandidate = /\/(square|content|post|feed)[^?]*\/(create|publish|add|post)/i.test(url)
+      || /square/i.test(url) && response.request().method() === 'POST';
+    if (!isCandidate) return;
+    let body;
+    try {
+      body = await response.text();
+      if (body.length > 2000) body = `${body.slice(0, 2000)}…(truncated)`;
+    } catch {
+      body = '<unreadable body>';
+    }
+    capturedResponses.push({
+      url,
+      method: response.request().method(),
+      status: response.status(),
+      body,
+    });
+  });
+
   // Binance maintains live connections, so waiting for network idle can time out.
   await page.goto('https://www.binance.com/en/square', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
@@ -216,6 +240,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   try {
     await composer.waitFor({ state: 'hidden', timeout: 30_000 });
     console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
+    console.log(`[postToSquare] captured post-related network responses: ${JSON.stringify(capturedResponses)}`);
   } catch (err) {
     // The click succeeded but the composer never closed. Capture enough
     // context here to tell apart: (a) a silent rejection with a toast/
@@ -227,9 +252,13 @@ export async function postToSquare(symbol, text, imageBuffer) {
       (nodes) => nodes.filter((n) => n.offsetParent !== null).length,
     ).catch(() => -1);
 
+    // Railway sets RAILWAY_VOLUME_MOUNT_PATH to the mounted volume's path
+    // when a volume is attached; that storage survives past container exit,
+    // unlike /tmp which is gone as soon as the deploy stops.
+    const screenshotDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/tmp';
     let screenshotPath;
     try {
-      screenshotPath = `/tmp/${symbol}-composer-timeout-${Date.now()}.png`;
+      screenshotPath = `${screenshotDir}/${symbol}-composer-timeout-${Date.now()}.png`;
       await page.screenshot({ path: screenshotPath, fullPage: true });
     } catch (screenshotErr) {
       console.log(`[postToSquare] failed to capture timeout screenshot: ${screenshotErr.message}`);
@@ -246,6 +275,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
     console.log(`[postToSquare] possible error/toast text: ${JSON.stringify(possibleErrorText)}`);
     if (screenshotPath) console.log(`[postToSquare] timeout screenshot saved to ${screenshotPath}`);
     console.log(`[postToSquare] page url at timeout: ${page.url()}`);
+    console.log(`[postToSquare] captured post-related network responses: ${JSON.stringify(capturedResponses)}`);
 
     await browser.close();
     throw err;
