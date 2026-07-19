@@ -41,6 +41,8 @@ export async function postToSquare(symbol, text, imageBuffer) {
   // Codegen and Railway. Once the composer is open, it is the last textbox.
   const editor = page.getByRole('textbox').last();
   await editor.waitFor({ state: 'visible', timeout: 30_000 });
+  const editorHandle = await editor.elementHandle();
+  if (!editorHandle) throw new Error('Post editor was not found');
   await editor.click();
   await editor.fill(text);
 
@@ -85,7 +87,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   }
 
   await page.getByRole('button', { name: 'Post', exact: true }).last().click();
-  await editor.waitFor({ state: 'hidden', timeout: 15_000 });
+  await editorHandle.waitForElementState('hidden', { timeout: 15_000 });
   console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
   // --- end placeholder section ---
 
