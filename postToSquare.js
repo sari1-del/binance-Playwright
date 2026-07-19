@@ -65,11 +65,17 @@ export async function postToSquare(symbol, text, imageBuffer) {
   const coinSearch = page.getByRole('textbox', { name: 'Search coin or stock' });
   await coinSearch.fill(symbol.replace(/USDT$/, ''), { timeout: 5_000 });
 
-  const perpOptions = page.getByText('Perp', { exact: true });
+  const baseSymbol = symbol.replace(/USDT$/, '');
+  const perpOptions = page.locator('[id^="tippy-"] .cursor-pointer');
   let selectedPerp = false;
   for (let index = 0; index < await perpOptions.count(); index += 1) {
     const option = perpOptions.nth(index);
-    if (await option.isVisible()) {
+    const optionText = await option.textContent();
+    if (
+      await option.isVisible()
+      && optionText?.includes('Perp')
+      && (optionText.includes(baseSymbol) || optionText.includes(symbol))
+    ) {
       await option.click({ timeout: 5_000 });
       selectedPerp = true;
       break;
