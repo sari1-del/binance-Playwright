@@ -64,6 +64,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
 
   const coinSearch = page.getByRole('textbox', { name: 'Search coin or stock' });
   await coinSearch.fill(symbol.replace(/USDT$/, ''), { timeout: 5_000 });
+  await page.waitForTimeout(1_000); // Binance debounces the coin-picker search.
 
   const baseSymbol = symbol.replace(/USDT$/, '');
   const perpOptions = page.locator('[id^="tippy-"] .cursor-pointer');
