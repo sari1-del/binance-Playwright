@@ -37,7 +37,9 @@ export async function postToSquare(symbol, text, imageBuffer) {
   await page.getByRole('button', { name: 'Post' }).first().click();
   await page.getByRole('paragraph').nth(1).click();
 
-  const editor = page.locator('.short-editor-editor-wrapper.css-12werr8 > .css-18sm1i8 > .short-editor-content > .short-editor-editor > .css-gdk4go > .json-article-editor');
+  const editor = page
+    .locator('.short-editor-editor-wrapper.css-12werr8 > .css-18sm1i8 > .short-editor-content > .short-editor-editor > .css-gdk4go > .json-article-editor')
+    .locator('[contenteditable="true"]');
   await editor.waitFor({ state: 'visible', timeout: 30_000 });
   await editor.click();
   await editor.fill(text);
