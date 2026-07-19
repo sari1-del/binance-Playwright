@@ -35,14 +35,14 @@ export async function postToSquare(symbol, text, imageBuffer) {
   // The "Square Stay informed" link was an incidental Codegen interaction;
   // it is not present in the headless layout used on Railway.
   await page.getByRole('button', { name: 'Post' }).first().click();
+  const composer = page.locator('.short-editor-editor-wrapper').first();
+  await composer.waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByRole('paragraph').nth(1).click();
 
   // The editable node's generated class/attributes differ between headed
   // Codegen and Railway. Once the composer is open, it is the last textbox.
   const editor = page.getByRole('textbox').last();
   await editor.waitFor({ state: 'visible', timeout: 30_000 });
-  const editorHandle = await editor.elementHandle();
-  if (!editorHandle) throw new Error('Post editor was not found');
   await editor.click();
   await editor.fill(text);
 
@@ -86,8 +86,8 @@ export async function postToSquare(symbol, text, imageBuffer) {
     return;
   }
 
-  await page.getByRole('button', { name: 'Post', exact: true }).last().click();
-  await editorHandle.waitForElementState('hidden', { timeout: 15_000 });
+  await composer.getByRole('button', { name: 'Post', exact: true }).click();
+  await composer.waitFor({ state: 'hidden', timeout: 15_000 });
   console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
   // --- end placeholder section ---
 
