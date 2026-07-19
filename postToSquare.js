@@ -124,6 +124,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   // composer stayed on screen well past 30s). Capture this response so we
   // can key success/failure off it directly instead of the DOM.
   let publishResponse;
+  let publishRequestBody;
   page.on('response', async (response) => {
     const url = response.url();
     if (!/\/bapi\/composite\/v5\/private\/pgc\/content\/add/.test(url)) return;
@@ -135,6 +136,9 @@ export async function postToSquare(symbol, text, imageBuffer) {
       body = null;
     }
     publishResponse = { url, status: response.status(), body };
+    // Also capture what we actually sent, so we can check whether the
+    // widget/asset data made it into the payload at all.
+    publishRequestBody = response.request().postData();
   });
 
   // Binance maintains live connections, so waiting for network idle can time out.
@@ -223,6 +227,17 @@ export async function postToSquare(symbol, text, imageBuffer) {
   }
   await page.waitForTimeout(2000);
 
+  // Visual proof of exactly what's in the composer right before we submit —
+  // if the widget never got attached, this will show it missing.
+  const screenshotDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/tmp';
+  try {
+    const preSubmitPath = `${screenshotDir}/${symbol}-pre-submit-${Date.now()}.png`;
+    await page.screenshot({ path: preSubmitPath, fullPage: true });
+    console.log(`[postToSquare] ${symbol}: pre-submit screenshot saved to ${preSubmitPath}`);
+  } catch (screenshotErr) {
+    console.log(`[postToSquare] failed to capture pre-submit screenshot: ${screenshotErr.message}`);
+  }
+
   if (config.dryRun) {
     console.log(`[DRY RUN] Composer and widget validated for ${symbol}:\n${text}\n`);
     await browser.close();
@@ -256,6 +271,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
       console.log(`[postToSquare] failed to capture screenshot: ${screenshotErr.message}`);
     }
     console.log(`[postToSquare] ${symbol}: no publish API response observed within 30s after clicking Post.`);
+    console.log(`[postToSquare] ${symbol}: outgoing publish request payload (if any): ${publishRequestBody}`);
     if (screenshotPath) console.log(`[postToSquare] screenshot saved to ${screenshotPath}`);
     await browser.close();
     throw new Error('No response observed from the publish request after clicking Post');
@@ -272,6 +288,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   }
 
   console.log(`[postToSquare] Submission accepted for ${symbol}. postId=${body.data && body.data.id} shareLink=${body.data && body.data.shareLink}`);
+  console.log(`[postToSquare] ${symbol}: outgoing publish request payload: ${publishRequestBody}`);
 
   // Best-effort: give the UI a moment to settle/close, but don't fail the
   // cycle if it doesn't — we already have server confirmation of success.
