@@ -86,7 +86,9 @@ export async function postToSquare(symbol, text, imageBuffer) {
     return;
   }
 
-  await composer.getByRole('button', { name: 'Post', exact: true }).click();
+  // Binance renders the final publish button in a portal outside the composer.
+  // Codegen records it as the third Post button on the page.
+  await page.getByRole('button', { name: 'Post', exact: true }).nth(2).click();
   await composer.waitFor({ state: 'hidden', timeout: 15_000 });
   console.log(`[postToSquare] Submission accepted for ${symbol}; composer closed (url=${page.url()})`);
   // --- end placeholder section ---
