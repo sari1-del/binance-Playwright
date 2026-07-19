@@ -54,7 +54,7 @@ export async function postToSquare(symbol, text, imageBuffer) {
   await page.waitForTimeout(5000); // let the image preview upload
 
   // The Futures coin card is required for every published post.
-  const tradeWidgetButton = page.locator('.css-13a1332 > .editor-toolbar-container > .css-fwp0gd > .css-14x7wge > .icon-wrapper > .trade-widget-icon > .bn-svg');
+  const tradeWidgetButton = page.locator('.trade-widget-icon').first();
   if (await tradeWidgetButton.count() === 0) {
     throw new Error('Futures coin-card control was not found; refusing to publish without it');
   }
